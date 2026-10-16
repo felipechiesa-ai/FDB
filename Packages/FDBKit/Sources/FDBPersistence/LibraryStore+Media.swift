@@ -40,15 +40,7 @@ extension LibraryStore {
     /// Writes a consistent snapshot of the library database to `url` with SQLite's online backup API.
     public func backupDatabase(to url: URL) async throws {
         let destination = try DatabaseQueue(path: url.path)
-        try await database.backup(to: destination)
-    }
-
-    /// Replaces the library's contents with a backup's, in place, inside one SQLite backup transaction.
-    public func restoreDatabase(from url: URL) async throws {
-        var configuration = Configuration()
-        configuration.readonly = true
-        let source = try DatabaseQueue(path: url.path, configuration: configuration)
-        try await source.backup(to: database)
+        try database.backup(to: destination)
     }
 
     /// Migrations already applied to this library, in order.
@@ -57,11 +49,6 @@ extension LibraryStore {
             guard try db.tableExists("grdb_migrations") else { return [] }
             return try String.fetchAll(db, sql: "SELECT identifier FROM grdb_migrations ORDER BY identifier")
         }
-    }
-
-    /// Applies migrations the open library is missing. Call after restoring a backup from an older version.
-    public func migrateToCurrentSchema() throws {
-        try LibrarySchema.migrator.migrate(database)
     }
 
     static func applyPortrait(_ change: MediaChange, playerKey: String, in db: Database) throws {
@@ -127,6 +114,17 @@ extension LibraryStore {
     private func mediaAsset(sql: String, key: String) async throws -> MediaAsset? {
         try await database.read { db in
             try Row.fetchOne(db, sql: sql, arguments: [key]).map { try LibraryStore.mediaAsset(from: $0) }
+        }
+    }
+}
+
+extension LibraryStore {
+    /// SQLite's integrity check and foreign-key check, run on the open library.
+    public func databaseIsConsistent() async throws -> Bool {
+        try await database.read { db in
+            let integrity = try String.fetchOne(db, sql: "PRAGMA integrity_check")
+            let foreignKeyProblems = try Row.fetchAll(db, sql: "PRAGMA foreign_key_check").count
+            return integrity == "ok" && foreignKeyProblems == 0
         }
     }
 }

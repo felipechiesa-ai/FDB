@@ -120,7 +120,29 @@ struct RootView: View {
         } message: {
             Text(message ?? "")
         }
+        .overlay {
+            if library.isRestoring || library.isBlocked {
+                restoringOverlay
+            }
+        }
         .errorAlert($errorMessage)
+    }
+
+    /// Covers the window while a restore swaps the library. If the library cannot be reopened, the cover stays until relaunch.
+    private var restoringOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.2)
+            Group {
+                if library.isBlocked {
+                    Label("The library could not be reopened. Quit and open FDB again.", systemImage: "exclamationmark.triangle")
+                } else {
+                    ProgressView("Restoring library…")
+                }
+            }
+            .padding(24)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        }
+        .ignoresSafeArea()
     }
 
     private var restoreIsPresented: Binding<Bool> {
@@ -146,7 +168,7 @@ struct RootView: View {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         do {
-            try LibraryBackup.validate(url)
+            try await Task.detached(priority: .userInitiated) { _ = try LibraryBackup.validate(url) }.value
             restoreCandidate = url
         } catch {
             errorMessage = error.localizedDescription
@@ -158,13 +180,10 @@ struct RootView: View {
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         restoreCandidate = nil
         do {
-            let recovery = try await LibraryBackup.restore(
-                url,
-                into: library.store,
-                folder: library.folder,
+            let recovery = try await library.restore(
+                from: url,
                 recoveryDirectory: try LibraryLocation.recoveryDirectory()
             )
-            library.didChange()
             message = "Library restored. The previous library is kept as \(recovery.lastPathComponent)."
         } catch {
             errorMessage = error.localizedDescription

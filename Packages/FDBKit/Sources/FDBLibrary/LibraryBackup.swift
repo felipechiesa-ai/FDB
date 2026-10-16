@@ -95,30 +95,6 @@ public enum LibraryBackup {
         return manifest
     }
 
-    /// Replaces the open library with the backup. A recovery copy of the current library is written first.
-    /// A backup that fails validation leaves the library untouched.
-    public static func restore(
-        _ backupURL: URL,
-        into store: LibraryStore,
-        folder: LibraryFolder,
-        recoveryDirectory: URL
-    ) async throws -> URL {
-        let manifest = try validate(backupURL)
-        let recovery = try await create(from: store, folder: folder, in: recoveryDirectory, label: "Recovery")
-        for name in manifest.mediaFiles {
-            let destination = folder.originalsURL.appendingPathComponent(name)
-            if !FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.copyItem(
-                    at: backupURL.appendingPathComponent("media/originals/\(name)"),
-                    to: destination
-                )
-            }
-        }
-        try await store.restoreDatabase(from: backupURL.appendingPathComponent("database.sqlite"))
-        try store.migrateToCurrentSchema()
-        return recovery
-    }
-
     private static func checkDatabase(at url: URL) throws {
         var configuration = Configuration()
         configuration.readonly = true
@@ -152,7 +128,7 @@ public enum LibraryBackup {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
-    private static func timestamp(_ date: Date) -> String {
+    static func timestamp(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"

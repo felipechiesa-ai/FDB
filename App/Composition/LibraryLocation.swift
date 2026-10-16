@@ -19,6 +19,7 @@ enum LibraryLocation {
 
     static func open() throws -> OpenedLibrary {
         let folder = LibraryFolder(url: try libraryFolder(demo: isDemo))
+        try LibraryRestoreRecovery.recoverIfNeeded(for: folder)
         try folder.prepare()
         let database = try LibraryDatabase.open(at: folder.databaseURL)
         return OpenedLibrary(folder: folder, store: LibraryStore(database: database))

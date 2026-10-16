@@ -46,6 +46,8 @@ Original files live in `media/originals/<sha256>.<ext>`. Thumbnails are cached i
 
 A backup is a folder `FDB-<label>-<timestamp>.fdbbackup` with `manifest.json`, a SQLite snapshot (`database.sqlite`), and the originals the snapshot references. The manifest records the format version (1), the library ID, the applied migrations, the snapshot SHA-256, and the media file names. Newer formats, damaged snapshots, newer schemas, and missing or mismatched originals are refused before anything changes.
 
+A restore never edits the active library in place. It builds a `Restoring-<timestamp>-<id>` folder beside the library, checks it, and then swaps folders. The replaced library and a recovery backup (`FDB-Recovery-<timestamp>.fdbbackup`) stay in the `Recovery` folder. The swap is recorded in `restore-in-progress.json` until the restored library opens. See [decision 0002](decisions/0002-restore-procedure.md).
+
 ## Not in Stage 1
 
 Competitions, editions, matches, and venues.
