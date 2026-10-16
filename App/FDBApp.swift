@@ -6,7 +6,7 @@ struct FDBApp: App {
 
     init() {
         library = Result {
-            LibraryModel(store: try LibraryLocation.openStore())
+            LibraryModel(opened: try LibraryLocation.open())
         }
     }
 

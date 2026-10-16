@@ -8,7 +8,8 @@ let package = Package(
     ],
     products: [
         .library(name: "FDBDomain", targets: ["FDBDomain"]),
-        .library(name: "FDBPersistence", targets: ["FDBPersistence"])
+        .library(name: "FDBPersistence", targets: ["FDBPersistence"]),
+        .library(name: "FDBLibrary", targets: ["FDBLibrary"])
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.11.1")
@@ -22,6 +23,14 @@ let package = Package(
                 .product(name: "GRDB", package: "GRDB.swift")
             ]
         ),
+        .target(
+            name: "FDBLibrary",
+            dependencies: [
+                "FDBDomain",
+                "FDBPersistence",
+                .product(name: "GRDB", package: "GRDB.swift")
+            ]
+        ),
         .testTarget(
             name: "FDBDomainTests",
             dependencies: ["FDBDomain"]
@@ -31,6 +40,15 @@ let package = Package(
             dependencies: [
                 "FDBDomain",
                 "FDBPersistence",
+                .product(name: "GRDB", package: "GRDB.swift")
+            ]
+        ),
+        .testTarget(
+            name: "FDBLibraryTests",
+            dependencies: [
+                "FDBDomain",
+                "FDBPersistence",
+                "FDBLibrary",
                 .product(name: "GRDB", package: "GRDB.swift")
             ]
         )

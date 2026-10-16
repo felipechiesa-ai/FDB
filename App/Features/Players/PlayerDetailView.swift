@@ -10,6 +10,7 @@ struct PlayerDetailView: View {
     @State private var player: Player?
     @State private var memberships: [PlayerMembershipEntry] = []
     @State private var countryNames: [CountryID: String] = [:]
+    @State private var portraitFileName: String?
     @State private var isEditing = false
     @State private var errorMessage: String?
 
@@ -17,6 +18,10 @@ struct PlayerDetailView: View {
         Group {
             if let player {
                 Form {
+                    Section {
+                        MediaThumbnailView(fileName: portraitFileName, placeholder: "person.crop.square", size: 120)
+                            .frame(maxWidth: .infinity)
+                    }
                     Section("Name") {
                         LabeledContent("Display name", value: player.displayName)
                         if let fullName = player.fullName {
@@ -123,6 +128,7 @@ struct PlayerDetailView: View {
             memberships = try await library.store.memberships(playerID: playerID)
             let countries = try await library.store.countries()
             countryNames = Dictionary(uniqueKeysWithValues: countries.map { ($0.id, $0.displayName) })
+            portraitFileName = try await library.store.portrait(for: playerID)?.fileName
         } catch {
             errorMessage = error.localizedDescription
         }

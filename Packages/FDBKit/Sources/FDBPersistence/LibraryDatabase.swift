@@ -10,6 +10,11 @@ public enum LibraryDatabase {
         return queue
     }
 
+    /// Identifiers of every migration this build knows. A library with others was written by a newer build.
+    public static var knownMigrationIdentifiers: [String] {
+        LibrarySchema.knownIdentifiers
+    }
+
     /// Opens an empty in-memory library. Used by tests.
     public static func openInMemory() throws -> DatabaseQueue {
         let queue = try DatabaseQueue(configuration: configuration())

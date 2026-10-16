@@ -32,6 +32,20 @@ Matching and sorting use `search_key` and `sort_key` columns: lowercase, diacrit
 - The same player cannot have overlapping memberships in the same team. Missing bounds are open. Memberships in different teams may overlap.
 - Ages are computed from exact birth dates only. Unknown ages show no value.
 
+## Media (migration v2, 01-06)
+
+| Table | Key | Relationships | Notes |
+| --- | --- | --- | --- |
+| `media_asset` | `id` (first 16 bytes of `sha256`) | none | `sha256` is unique and names the managed file. Only JPEG and PNG, after metadata removal and orientation. |
+| `player_portrait` | `player_id` | player (cascade), asset (restrict) | At most one portrait per player. |
+| `club_badge` | `club_id` | club (cascade), asset (restrict) | At most one badge per club. |
+
+Original files live in `media/originals/<sha256>.<ext>`. Thumbnails are cached in `media/thumbnails/` and can be rebuilt. A save writes the file first and then the reference, in one transaction.
+
+## Backups (01-08)
+
+A backup is a folder `FDB-<label>-<timestamp>.fdbbackup` with `manifest.json`, a SQLite snapshot (`database.sqlite`), and the originals the snapshot references. The manifest records the format version (1), the library ID, the applied migrations, the snapshot SHA-256, and the media file names. Newer formats, damaged snapshots, newer schemas, and missing or mismatched originals are refused before anything changes.
+
 ## Not in Stage 1
 
-Competitions, editions, matches, venues, media assets (01-06), and the backup manifest (01-08).
+Competitions, editions, matches, and venues.

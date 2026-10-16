@@ -2,14 +2,51 @@ import GRDB
 
 /// Ordered, forward-only migrations. Released migrations are never edited.
 enum LibrarySchema {
-    static var migrator: DatabaseMigrator {
+    static let v1Identifier = "v1-people-clubs-rosters"
+    static let v2Identifier = "v2-media"
+
+    /// Every migration this build knows, in order.
+    static var knownIdentifiers: [String] { [v1Identifier, v2Identifier] }
+
+    static var migrator: DatabaseMigrator { makeMigrator(upTo: nil) }
+
+    /// Migrations up to and including `identifier`. Tests use it to build older library versions.
+    static func makeMigrator(upTo identifier: String?) -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
-        migrator.registerMigration("v1-people-clubs-rosters") { db in
+        migrator.registerMigration(v1Identifier) { db in
             try db.execute(sql: createTables)
             try seedCountries(db)
         }
+        if identifier != v1Identifier {
+            migrator.registerMigration(v2Identifier) { db in
+                try db.execute(sql: createMediaTables)
+            }
+        }
         return migrator
     }
+
+    private static let createMediaTables = """
+    CREATE TABLE media_asset (
+        id TEXT PRIMARY KEY NOT NULL,
+        sha256 TEXT NOT NULL UNIQUE CHECK (length(sha256) = 64),
+        file_extension TEXT NOT NULL CHECK (file_extension IN ('png', 'jpg')),
+        mime_type TEXT NOT NULL CHECK (mime_type IN ('image/png', 'image/jpeg')),
+        pixel_width INTEGER NOT NULL CHECK (pixel_width > 0),
+        pixel_height INTEGER NOT NULL CHECK (pixel_height > 0),
+        byte_size INTEGER NOT NULL CHECK (byte_size > 0),
+        created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE player_portrait (
+        player_id TEXT PRIMARY KEY NOT NULL REFERENCES player (id) ON DELETE CASCADE,
+        asset_id TEXT NOT NULL REFERENCES media_asset (id) ON DELETE RESTRICT
+    );
+
+    CREATE TABLE club_badge (
+        club_id TEXT PRIMARY KEY NOT NULL REFERENCES club (id) ON DELETE CASCADE,
+        asset_id TEXT NOT NULL REFERENCES media_asset (id) ON DELETE RESTRICT
+    );
+    """
 
     private static let createTables = """
     CREATE TABLE country (

@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import FDBDomain
 import FDBPersistence
 
@@ -14,6 +15,9 @@ struct PlayerEditorView: View {
     @State private var aliasesText: String
     @State private var heightText: String
     @State private var countries: [Country] = []
+    @State private var portraitFileName: String?
+    @State private var portraitChange: MediaChange = .unchanged
+    @State private var choosingPortrait = false
     @State private var errorMessage: String?
     @State private var isSaving = false
     @State private var confirmingDiscard = false
@@ -35,6 +39,23 @@ struct PlayerEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Photo") {
+                    HStack(alignment: .center, spacing: 16) {
+                        MediaThumbnailView(fileName: portraitFileName, placeholder: "person.crop.square", size: 96)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Button("Choose Image…") { choosingPortrait = true }
+                            if portraitFileName != nil {
+                                Button("Remove Image", role: .destructive) {
+                                    portraitFileName = nil
+                                    portraitChange = .remove
+                                }
+                            }
+                            Text("JPEG or PNG, up to 25 MB.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 Section("Name") {
                     TextField("Display name", text: $draft.displayName)
                     TextField("Full name", text: optionalText(\.fullName))
@@ -130,6 +151,23 @@ struct PlayerEditorView: View {
                         .disabled(isSaving)
                 }
             }
+            .fileImporter(isPresented: $choosingPortrait, allowedContentTypes: [.jpeg, .png]) { result in
+                guard case .success(let url) = result else {
+                    if case .failure(let error) = result { errorMessage = error.localizedDescription }
+                    return
+                }
+                Task {
+                    let accessed = url.startAccessingSecurityScopedResource()
+                    defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+                    do {
+                        let asset = try await library.importImage(from: url)
+                        portraitChange = .set(asset)
+                        portraitFileName = asset.fileName
+                    } catch {
+                        errorMessage = error.localizedDescription
+                    }
+                }
+            }
             .confirmationDialog("Discard changes?", isPresented: $confirmingDiscard) {
                 Button("Discard", role: .destructive) { dismiss() }
                 Button("Keep Editing", role: .cancel) {}
@@ -137,10 +175,14 @@ struct PlayerEditorView: View {
             .errorAlert($errorMessage)
         }
         .frame(minWidth: 540, minHeight: 640)
-        .task { countries = (try? await library.store.countries()) ?? [] }
+        .task {
+            countries = (try? await library.store.countries()) ?? []
+            portraitFileName = try? await library.store.portrait(for: draft.id)?.fileName
+        }
     }
 
     private var hasChanges: Bool {
+        if portraitChange != .unchanged { return true }
         guard let original else {
             return !draft.displayName.isEmpty || !aliasesText.isEmpty || !heightText.isEmpty
         }
@@ -192,10 +234,11 @@ struct PlayerEditorView: View {
         }
 
         isSaving = true
+        let photo = portraitChange
         Task {
             defer { isSaving = false }
             do {
-                try await library.store.savePlayer(candidate)
+                try await library.store.savePlayer(candidate, portrait: photo)
                 onSaved(candidate.id)
                 dismiss()
             } catch {

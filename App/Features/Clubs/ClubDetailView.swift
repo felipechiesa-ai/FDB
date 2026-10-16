@@ -9,6 +9,7 @@ struct ClubDetailView: View {
 
     @State private var club: Club?
     @State private var countryName: String?
+    @State private var badgeFileName: String?
     @State private var teams: [Team] = []
     @State private var isEditing = false
     @State private var isAddingTeam = false
@@ -18,6 +19,10 @@ struct ClubDetailView: View {
         Group {
             if let club {
                 Form {
+                    Section {
+                        MediaThumbnailView(fileName: badgeFileName, placeholder: "shield", size: 120)
+                            .frame(maxWidth: .infinity)
+                    }
                     Section("Club") {
                         if let officialName = club.officialName {
                             LabeledContent("Official name", value: officialName)
@@ -104,6 +109,7 @@ struct ClubDetailView: View {
     private func reload() async {
         do {
             club = try await library.store.club(id: clubID)
+            badgeFileName = try await library.store.badge(for: clubID)?.fileName
             teams = try await library.store.teams(clubID: clubID)
             if let countryID = club?.countryID {
                 let countries = try await library.store.countries()

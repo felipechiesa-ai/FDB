@@ -94,7 +94,7 @@ extension LibraryStore {
 
     /// Validates and saves a player with its aliases, citizenships, and positions in one transaction.
     /// Same-name players stay separate: identity is the ID, never the name.
-    public func savePlayer(_ player: Player) async throws {
+    public func savePlayer(_ player: Player, portrait: MediaChange = .unchanged) async throws {
         try player.validate()
         let key = player.id.rawValue.uuidString
         let aliases = LibraryStore.cleanedAliases(player.aliases)
@@ -155,6 +155,7 @@ extension LibraryStore {
                     arguments: [key, assignment.position.rawValue, assignment.isPrimary ? 1 : 0]
                 )
             }
+            try LibraryStore.applyPortrait(portrait, playerKey: key, in: db)
         }
     }
 

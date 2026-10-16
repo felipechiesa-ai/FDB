@@ -63,7 +63,7 @@ extension LibraryStore {
     }
 
     /// Saves a club. A new club also gets one senior team, so it is usable before its teams are organized.
-    public func saveClub(_ club: Club) async throws {
+    public func saveClub(_ club: Club, badge: MediaChange = .unchanged) async throws {
         try club.validate()
         let key = club.id.rawValue.uuidString
         let searchKey = SearchText.fold(
@@ -111,6 +111,7 @@ extension LibraryStore {
                     in: db
                 )
             }
+            try LibraryStore.applyBadge(badge, clubKey: key, in: db)
         }
     }
 

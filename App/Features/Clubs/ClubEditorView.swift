@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import FDBDomain
 import FDBPersistence
 
@@ -12,6 +13,9 @@ struct ClubEditorView: View {
 
     @State private var draft: Club
     @State private var countries: [Country] = []
+    @State private var badgeFileName: String?
+    @State private var badgeChange: MediaChange = .unchanged
+    @State private var choosingBadge = false
     @State private var errorMessage: String?
     @State private var isSaving = false
 
@@ -24,6 +28,23 @@ struct ClubEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Badge") {
+                    HStack(alignment: .center, spacing: 16) {
+                        MediaThumbnailView(fileName: badgeFileName, placeholder: "shield", size: 96)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Button("Choose Image…") { choosingBadge = true }
+                            if badgeFileName != nil {
+                                Button("Remove Image", role: .destructive) {
+                                    badgeFileName = nil
+                                    badgeChange = .remove
+                                }
+                            }
+                            Text("JPEG or PNG, up to 25 MB.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 Section("Name") {
                     TextField("Display name", text: $draft.displayName)
                     TextField("Official name", text: optionalText(\.officialName))
@@ -55,10 +76,30 @@ struct ClubEditorView: View {
                         .disabled(isSaving)
                 }
             }
+            .fileImporter(isPresented: $choosingBadge, allowedContentTypes: [.jpeg, .png]) { result in
+                guard case .success(let url) = result else {
+                    if case .failure(let error) = result { errorMessage = error.localizedDescription }
+                    return
+                }
+                Task {
+                    let accessed = url.startAccessingSecurityScopedResource()
+                    defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+                    do {
+                        let asset = try await library.importImage(from: url)
+                        badgeChange = .set(asset)
+                        badgeFileName = asset.fileName
+                    } catch {
+                        errorMessage = error.localizedDescription
+                    }
+                }
+            }
             .errorAlert($errorMessage)
         }
         .frame(minWidth: 520, minHeight: 600)
-        .task { countries = (try? await library.store.countries()) ?? [] }
+        .task {
+            countries = (try? await library.store.countries()) ?? []
+            badgeFileName = try? await library.store.badge(for: draft.id)?.fileName
+        }
     }
 
     private func optionalText(_ keyPath: WritableKeyPath<Club, String?>) -> Binding<String> {
@@ -70,11 +111,12 @@ struct ClubEditorView: View {
 
     private func save() {
         let club = draft
+        let badge = badgeChange
         isSaving = true
         Task {
             defer { isSaving = false }
             do {
-                try await library.store.saveClub(club)
+                try await library.store.saveClub(club, badge: badge)
                 onSaved(club.id)
                 dismiss()
             } catch {
