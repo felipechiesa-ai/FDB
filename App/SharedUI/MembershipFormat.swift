@@ -1,3 +1,4 @@
+import Foundation
 import FDBDomain
 
 enum MembershipFormat {
@@ -15,5 +16,14 @@ enum MembershipFormat {
             parts.append("left on \(end.formatted())")
         }
         return parts.joined(separator: " · ")
+    }
+
+    /// A shirt number from form text. Blank means none. Text that is not a whole number is refused;
+    /// the range check happens when the membership is validated.
+    static func shirtNumber(from text: String) throws -> Int? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        guard let number = Int(trimmed) else { throw DomainError.invalidShirtNumber }
+        return number
     }
 }

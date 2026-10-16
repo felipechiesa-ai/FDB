@@ -12,6 +12,7 @@ struct PlayerDetailView: View {
     @State private var countryNames: [CountryID: String] = [:]
     @State private var portraitFileName: String?
     @State private var isEditing = false
+    @State private var editingEntry: PlayerMembershipEntry?
     @State private var errorMessage: String?
 
     var body: some View {
@@ -71,6 +72,9 @@ struct PlayerDetailView: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
+                            .contextMenu {
+                                Button("Edit Membership…") { editingEntry = entry }
+                            }
                         }
                     }
                     if let notes = player.notes {
@@ -98,6 +102,9 @@ struct PlayerDetailView: View {
             PlayerEditorView(player: player) { _ in
                 library.didChange()
             }
+        }
+        .sheet(item: $editingEntry) { entry in
+            EditMembershipSheet(membership: entry.membership, playerName: player?.displayName ?? "", teamName: entry.teamName)
         }
         .errorAlert($errorMessage)
     }

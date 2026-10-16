@@ -12,6 +12,7 @@ struct TeamDetailView: View {
     @State private var roster: [RosterEntry] = []
     @State private var isAddingPlayer = false
     @State private var isEditingTeam = false
+    @State private var editingEntry: RosterEntry?
     @State private var endingEntry: RosterEntry?
     @State private var errorMessage: String?
 
@@ -37,6 +38,7 @@ struct TeamDetailView: View {
                                 RosterRow(entry: entry)
                             }
                             .contextMenu {
+                                Button("Edit Membership…") { editingEntry = entry }
                                 if entry.membership.endDate == nil {
                                     Button("End Membership…") { endingEntry = entry }
                                 }
@@ -69,6 +71,9 @@ struct TeamDetailView: View {
                     library.didChange()
                 }
             }
+        }
+        .sheet(item: $editingEntry) { entry in
+            EditMembershipSheet(membership: entry.membership, playerName: entry.playerName, teamName: team?.displayName ?? "")
         }
         .sheet(item: $endingEntry) { entry in
             EndMembershipSheet(entry: entry)

@@ -10,9 +10,9 @@ struct MembershipEditorView: View {
     let team: Team
     let onSaved: () -> Void
 
-    @State private var players: [PlayerListItem] = []
     @State private var playerSearch = ""
-    @State private var playerID: PlayerID?
+    @State private var results: [PlayerListItem] = []
+    @State private var selectedPlayer: PlayerListItem?
     @State private var startDate: PartialDate?
     @State private var endDate: PartialDate?
     @State private var shirtText = ""
@@ -21,22 +21,32 @@ struct MembershipEditorView: View {
     @State private var errorMessage: String?
     @State private var isSaving = false
 
-    private var filteredPlayers: [PlayerListItem] {
-        let query = SearchText.fold(playerSearch.trimmingCharacters(in: .whitespacesAndNewlines))
-        guard !query.isEmpty else { return players }
-        return players.filter { SearchText.fold($0.displayName).contains(query) }
-    }
-
     var body: some View {
         NavigationStack {
             Form {
                 Section("Player") {
+                    LabeledContent("Player", value: selectedPlayer?.displayName ?? "Not chosen")
                     TextField("Search players", text: $playerSearch)
-                    Picker("Player", selection: $playerID) {
-                        Text("Choose a player").tag(PlayerID?.none)
-                        ForEach(filteredPlayers) { player in
-                            Text(player.displayName).tag(Optional(player.id))
+                    if results.isEmpty {
+                        Text(playerSearch.isEmpty ? "No active players yet" : "No players match this search")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(results) { player in
+                        Button {
+                            selectedPlayer = player
+                        } label: {
+                            HStack {
+                                Text(player.displayName)
+                                Spacer()
+                                if selectedPlayer?.id == player.id {
+                                    Image(systemName: "checkmark")
+                                        .accessibilityHidden(true)
+                                }
+                            }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(selectedPlayer?.id == player.id ? .isSelected : [])
                     }
                 }
                 Section("Dates") {
@@ -67,30 +77,37 @@ struct MembershipEditorView: View {
             .errorAlert($errorMessage)
         }
         .frame(minWidth: 520, minHeight: 620)
-        .task { await loadPlayers() }
+        .task(id: playerSearch) { await searchPlayers() }
     }
 
-    private func loadPlayers() async {
+    /// Runs as the search text changes. A new keystroke cancels the previous run, and a short pause keeps the
+    /// list from being rebuilt on every key. A cancelled search never replaces the list.
+    private func searchPlayers() async {
+        let query = playerSearch
+        try? await Task.sleep(for: .milliseconds(200))
+        guard !Task.isCancelled else { return }
         do {
-            players = try await library.store.playerList()
+            let found = try await library.store.playerList(search: query)
+            guard !Task.isCancelled else { return }
+            results = found
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
     private func save() {
-        guard let playerID else {
+        guard let selectedPlayer else {
             errorMessage = "Choose a player."
             return
         }
         let membership: RosterMembership
         do {
             membership = RosterMembership(
-                playerID: playerID,
+                playerID: selectedPlayer.id,
                 teamID: team.id,
                 startDate: startDate,
                 endDate: endDate,
-                shirtNumber: try parsedShirtNumber(),
+                shirtNumber: try MembershipFormat.shirtNumber(from: shirtText),
                 status: status,
                 notes: notes
             )
@@ -111,12 +128,83 @@ struct MembershipEditorView: View {
             }
         }
     }
+}
 
-    private func parsedShirtNumber() throws -> Int? {
-        let text = shirtText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.isEmpty { return nil }
-        guard let number = Int(text) else { throw DomainError.invalidShirtNumber }
-        return number
+/// Changes a membership's shirt number and status. The player, the team, and the dates stay as recorded.
+struct EditMembershipSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(LibraryModel.self) private var library
+
+    let membership: RosterMembership
+    let playerName: String
+    let teamName: String
+
+    @State private var shirtText: String
+    @State private var status: MembershipStatus
+    @State private var errorMessage: String?
+    @State private var isSaving = false
+
+    init(membership: RosterMembership, playerName: String, teamName: String) {
+        self.membership = membership
+        self.playerName = playerName
+        self.teamName = teamName
+        _shirtText = State(initialValue: membership.shirtNumber.map { "\($0)" } ?? "")
+        _status = State(initialValue: membership.status)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    LabeledContent("Player", value: playerName)
+                    LabeledContent("Team", value: teamName)
+                }
+                Section {
+                    TextField("Shirt number", text: $shirtText)
+                    Picker("Status", selection: $status) {
+                        ForEach(MembershipStatus.allCases, id: \.self) { option in
+                            Text(option.label).tag(option)
+                        }
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle("Edit Membership")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .disabled(isSaving)
+                }
+            }
+            .errorAlert($errorMessage)
+        }
+        .frame(minWidth: 420, minHeight: 320)
+    }
+
+    private func save() {
+        var updated = membership
+        do {
+            updated.shirtNumber = try MembershipFormat.shirtNumber(from: shirtText)
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
+        updated.status = status
+
+        isSaving = true
+        Task {
+            defer { isSaving = false }
+            do {
+                try await library.store.saveMembership(updated)
+                library.didChange()
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 }
 

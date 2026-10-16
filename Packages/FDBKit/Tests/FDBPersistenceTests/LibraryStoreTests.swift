@@ -181,6 +181,52 @@ import FDBDomain
         #expect(try await store.player(id: player.id) != nil)
     }
 
+    @Test func editingShirtNumberAndStatusKeepsTheDatesAndTheSameMembership() async throws {
+        let store = try makeStore()
+        let club = Club(displayName: "Club Ejemplo")
+        try await store.saveClub(club)
+        let team = try #require(try await store.teams(clubID: club.id).first)
+        let player = Player(displayName: "Editable Shirt")
+        try await store.savePlayer(player)
+        let membership = RosterMembership(
+            playerID: player.id,
+            teamID: team.id,
+            startDate: PartialDate(year: 2025, month: 1, day: 1),
+            shirtNumber: 9
+        )
+        try await store.saveMembership(membership)
+
+        var edited = membership
+        edited.shirtNumber = 10
+        edited.status = .uncertain
+        try await store.saveMembership(edited)
+
+        let saved = try #require(try await store.roster(teamID: team.id).first?.membership)
+        #expect(saved.id == membership.id)
+        #expect(saved.shirtNumber == 10)
+        #expect(saved.status == .uncertain)
+        #expect(saved.startDate?.storageText == membership.startDate?.storageText)
+        #expect(try await store.memberships(playerID: player.id).count == 1)
+    }
+
+    @Test func invalidShirtNumberIsRefusedWithoutAWrite() async throws {
+        let store = try makeStore()
+        let club = Club(displayName: "Club Ejemplo")
+        try await store.saveClub(club)
+        let team = try #require(try await store.teams(clubID: club.id).first)
+        let player = Player(displayName: "Bad Shirt")
+        try await store.savePlayer(player)
+        let membership = RosterMembership(playerID: player.id, teamID: team.id, shirtNumber: 9)
+        try await store.saveMembership(membership)
+
+        var edited = membership
+        edited.shirtNumber = 100
+        await #expect(throws: DomainError.invalidShirtNumber) {
+            try await store.saveMembership(edited)
+        }
+        #expect(try await store.roster(teamID: team.id).first?.membership.shirtNumber == 9)
+    }
+
     @Test func savedDataSurvivesReopeningTheFile() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

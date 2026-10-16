@@ -95,68 +95,73 @@ extension LibraryStore {
     /// Validates and saves a player with its aliases, citizenships, and positions in one transaction.
     /// Same-name players stay separate: identity is the ID, never the name.
     public func savePlayer(_ player: Player, portrait: MediaChange = .unchanged) async throws {
+        try await database.write { db in
+            try LibraryStore.upsertPlayer(player, portrait: portrait, in: db)
+        }
+    }
+
+    /// The write behind `savePlayer`. Seeding code calls it directly, so many players can share one transaction.
+    static func upsertPlayer(_ player: Player, portrait: MediaChange, in db: Database) throws {
         try player.validate()
         let key = player.id.rawValue.uuidString
         let aliases = LibraryStore.cleanedAliases(player.aliases)
         let searchKey = SearchText.fold(([player.displayName, player.fullName ?? ""] + aliases).joined(separator: " "))
         let sortKey = SearchText.fold(player.displayName)
-        try await database.write { db in
-            let values: [(any DatabaseValueConvertible)?] = [
-                key,
-                player.displayName.nonEmptyTrimmed ?? "",
-                player.fullName?.nonEmptyTrimmed,
-                player.birthDate?.storageText,
-                player.birthCity?.nonEmptyTrimmed,
-                player.birthCountryID?.rawValue.uuidString,
-                player.heightCm,
-                player.preferredFoot?.rawValue,
-                player.notes?.nonEmptyTrimmed,
-                searchKey,
-                sortKey,
-                player.isArchived ? 1 : 0,
-                player.createdAt,
-                Date()
-            ]
-            try db.execute(sql: """
-                INSERT INTO player (id, display_name, full_name, birth_date, birth_city, birth_country_id,
-                                    height_cm, preferred_foot, notes, search_key, sort_key, is_archived,
-                                    created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (id) DO UPDATE SET
-                    display_name = excluded.display_name,
-                    full_name = excluded.full_name,
-                    birth_date = excluded.birth_date,
-                    birth_city = excluded.birth_city,
-                    birth_country_id = excluded.birth_country_id,
-                    height_cm = excluded.height_cm,
-                    preferred_foot = excluded.preferred_foot,
-                    notes = excluded.notes,
-                    search_key = excluded.search_key,
-                    sort_key = excluded.sort_key,
-                    is_archived = excluded.is_archived,
-                    updated_at = excluded.updated_at
-                """, arguments: StatementArguments(values))
+        let values: [(any DatabaseValueConvertible)?] = [
+            key,
+            player.displayName.nonEmptyTrimmed ?? "",
+            player.fullName?.nonEmptyTrimmed,
+            player.birthDate?.storageText,
+            player.birthCity?.nonEmptyTrimmed,
+            player.birthCountryID?.rawValue.uuidString,
+            player.heightCm,
+            player.preferredFoot?.rawValue,
+            player.notes?.nonEmptyTrimmed,
+            searchKey,
+            sortKey,
+            player.isArchived ? 1 : 0,
+            player.createdAt,
+            Date()
+        ]
+        try db.execute(sql: """
+            INSERT INTO player (id, display_name, full_name, birth_date, birth_city, birth_country_id,
+                                height_cm, preferred_foot, notes, search_key, sort_key, is_archived,
+                                created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (id) DO UPDATE SET
+                display_name = excluded.display_name,
+                full_name = excluded.full_name,
+                birth_date = excluded.birth_date,
+                birth_city = excluded.birth_city,
+                birth_country_id = excluded.birth_country_id,
+                height_cm = excluded.height_cm,
+                preferred_foot = excluded.preferred_foot,
+                notes = excluded.notes,
+                search_key = excluded.search_key,
+                sort_key = excluded.sort_key,
+                is_archived = excluded.is_archived,
+                updated_at = excluded.updated_at
+            """, arguments: StatementArguments(values))
 
-            try db.execute(sql: "DELETE FROM player_alias WHERE player_id = ?", arguments: [key])
-            for alias in aliases {
-                try db.execute(sql: "INSERT INTO player_alias (player_id, alias) VALUES (?, ?)", arguments: [key, alias])
-            }
-            try db.execute(sql: "DELETE FROM player_citizenship WHERE player_id = ?", arguments: [key])
-            for countryID in player.citizenshipIDs {
-                try db.execute(
-                    sql: "INSERT INTO player_citizenship (player_id, country_id) VALUES (?, ?)",
-                    arguments: [key, countryID.rawValue.uuidString]
-                )
-            }
-            try db.execute(sql: "DELETE FROM player_position WHERE player_id = ?", arguments: [key])
-            for assignment in player.positions {
-                try db.execute(
-                    sql: "INSERT INTO player_position (player_id, position_code, is_primary) VALUES (?, ?, ?)",
-                    arguments: [key, assignment.position.rawValue, assignment.isPrimary ? 1 : 0]
-                )
-            }
-            try LibraryStore.applyPortrait(portrait, playerKey: key, in: db)
+        try db.execute(sql: "DELETE FROM player_alias WHERE player_id = ?", arguments: [key])
+        for alias in aliases {
+            try db.execute(sql: "INSERT INTO player_alias (player_id, alias) VALUES (?, ?)", arguments: [key, alias])
         }
+        try db.execute(sql: "DELETE FROM player_citizenship WHERE player_id = ?", arguments: [key])
+        for countryID in player.citizenshipIDs {
+            try db.execute(
+                sql: "INSERT INTO player_citizenship (player_id, country_id) VALUES (?, ?)",
+                arguments: [key, countryID.rawValue.uuidString]
+            )
+        }
+        try db.execute(sql: "DELETE FROM player_position WHERE player_id = ?", arguments: [key])
+        for assignment in player.positions {
+            try db.execute(
+                sql: "INSERT INTO player_position (player_id, position_code, is_primary) VALUES (?, ?, ?)",
+                arguments: [key, assignment.position.rawValue, assignment.isPrimary ? 1 : 0]
+            )
+        }
+        try LibraryStore.applyPortrait(portrait, playerKey: key, in: db)
     }
 
     public func setPlayerArchived(_ id: PlayerID, isArchived: Bool) async throws {
