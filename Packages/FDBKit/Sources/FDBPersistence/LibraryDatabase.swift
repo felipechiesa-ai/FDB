@@ -1,11 +1,25 @@
+import Foundation
 import GRDB
 
-/// Entry point for opening FDB library databases.
+/// Opens library databases with FDB's connection settings and migrations applied.
 public enum LibraryDatabase {
-    /// Opens an in-memory database with the connection settings every FDB library uses.
+    /// Opens the library file at `url`, creating it and applying migrations when needed.
+    public static func open(at url: URL) throws -> DatabaseQueue {
+        let queue = try DatabaseQueue(path: url.path, configuration: configuration())
+        try LibrarySchema.migrator.migrate(queue)
+        return queue
+    }
+
+    /// Opens an empty in-memory library. Used by tests.
     public static func openInMemory() throws -> DatabaseQueue {
+        let queue = try DatabaseQueue(configuration: configuration())
+        try LibrarySchema.migrator.migrate(queue)
+        return queue
+    }
+
+    private static func configuration() -> Configuration {
         var configuration = Configuration()
         configuration.foreignKeysEnabled = true
-        return try DatabaseQueue(configuration: configuration)
+        return configuration
     }
 }

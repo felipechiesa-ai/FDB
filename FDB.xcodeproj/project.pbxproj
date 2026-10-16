@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		FDB0014 /* FDBPersistence in Frameworks */ = {isa = PBXBuildFile; productRef = FDB0015 /* FDBPersistence */; };
+		FDB0023 /* FDBDomain in Frameworks */ = {isa = PBXBuildFile; productRef = FDB0024 /* FDBDomain */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -45,6 +46,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FDB0014 /* FDBPersistence in Frameworks */,
+				FDB0023 /* FDBDomain in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -106,6 +108,7 @@
 			name = FDB;
 			packageProductDependencies = (
 				FDB0015 /* FDBPersistence */,
+				FDB0024 /* FDBDomain */,
 			);
 			productName = FDB;
 			productReference = FDB0004 /* FDB.app */;
@@ -410,6 +413,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FDB0016 /* XCLocalSwiftPackageReference "Packages/FDBKit" */;
 			productName = FDBPersistence;
+		};
+		FDB0024 /* FDBDomain */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FDB0016 /* XCLocalSwiftPackageReference "Packages/FDBKit" */;
+			productName = FDBDomain;
 		};
 /* End XCSwiftPackageProductDependency section */
 
