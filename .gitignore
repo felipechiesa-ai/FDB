@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+
+# Xcode
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# Swift Package Manager
+.build/
+
+# Runtime data: libraries, backups, and databases never belong in Git
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.fdblibrary/
+*.fdbbackup/
+
+# Credentials and signing material
+.env
+*.p12
+*.mobileprovision
+*.pem
